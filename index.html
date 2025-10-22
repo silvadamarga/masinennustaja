@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Breakout Predictor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .spinner { border-top-color: #3b82f6; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        th.sortable { cursor: pointer; position: relative; }
+        th.sortable:hover { background-color: #f9fafb; }
+        th.sortable .sort-arrow { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); opacity: 0.5; }
+        th.sortable:hover .sort-arrow { opacity: 1; }
+        th.sort-asc .sort-arrow, th.sort-desc .sort-arrow { opacity: 1; }
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltiptext {
+            visibility: hidden; width: 220px; background-color: #334155; color: #fff; text-align: center;
+            border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%;
+            margin-left: -110px; opacity: 0; transition: opacity 0.3s; font-size: 12px; font-weight: normal;
+        }
+        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+        /* Modal styles */
+        .modal-overlay {
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="flex flex-wrap justify-between items-center mb-6">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800">Stock Breakout Predictor</h1>
+                <button id="show-tips-btn" class="text-sm text-blue-600 hover:underline mt-1">Trading Strategy Guide</button>
+            </div>
+            <div id="regime-status" class="flex items-center gap-4 text-right">
+                 <div class="relative w-24 h-24">
+                    <canvas id="regimeChart"></canvas>
+                </div>
+                <div>
+                    <span class="font-medium text-slate-600">Current Market Regime:</span>
+                    <span id="regime-text" class="font-bold text-slate-700 text-lg block">Loading...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <div class="mb-4">
+                <label for="tickers" class="block text-sm font-medium text-gray-700 mb-2">Enter Ticker Symbols (comma separated):</label>
+                <textarea id="tickers" rows="3" class="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition shadow-sm"></textarea>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-4">
+                <button id="analyze-btn" class="bg-blue-600 text-white font-semibold py-2 px-5 rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center shadow-sm">
+                    <svg id="analyze-spinner" class="spinner h-5 w-5 mr-3 hidden" viewBox="0 0 24 24"></svg>
+                    Analyze
+                </button>
+                <button id="clear-btn" class="bg-slate-200 text-slate-800 font-semibold py-2 px-4 rounded-md hover:bg-slate-300 transition">Clear</button>
+                <div class="flex-grow"></div>
+                <button id="news-btn" class="bg-white text-slate-800 font-semibold py-2 px-5 rounded-md hover:bg-slate-100 transition border border-slate-300">News Analysis</button>
+                <button id="yahoo-btn" class="bg-white text-slate-800 font-semibold py-2 px-5 rounded-md hover:bg-slate-100 transition border border-slate-300">Yahoo's Most Actives</button>
+                <div class="flex items-center ml-4">
+                    <input type="checkbox" id="regime-filter" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="regime-filter" class="ml-2 block text-sm font-medium text-gray-900">Enable Regime Filter</label>
+                </div>
+            </div>
+        </div>
+
+        <div id="results-container" class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="0" data-sort="string">Ticker <span class="sort-arrow"></span></th>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="1" data-sort="price">Price <span class="sort-arrow"></span></th>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="2" data-sort="confidence">Confidence <span class="sort-arrow"></span></th>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider tooltip" data-column="3" data-sort="string">
+                                Pred. Return (%) <span class="sort-arrow"></span>
+                                <span class="tooltiptext">Predicted return over the next breakout period, from the breakout model.</span>
+                            </th>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="4" data-sort="string">Signal <span class="sort-arrow"></span></th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">News / Summary</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="6" class="text-center py-12 text-slate-500">Enter tickers and click "Analyze" to see results.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p id="error-message" class="text-red-600 mt-4 font-medium hidden"></p>
+    </div>
+
+    <!-- Tips Modal -->
+    <div id="tips-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div id="tips-overlay" class="absolute inset-0 bg-black bg-opacity-50 modal-overlay"></div>
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl transform modal-content scale-95 opacity-0">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h3 class="text-xl font-semibold">Trading Strategy Guide</h3>
+                <button id="close-tips-btn" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="p-6 space-y-4 text-slate-700">
+                <p class="font-semibold text-lg">How to Interpret the Results for a Profitable Strategy</p>
+                <p>This tool uses a two-model system. Think of it as a <strong class="text-slate-900">General (Regime Model)</strong> advising a <strong class="text-slate-900">Scout (Breakout Model)</strong>.</p>
+                
+                <div class="space-y-3">
+                    <div>
+                        <h4 class="font-semibold text-md text-slate-800">1. The General: Market Regime</h4>
+                        <p class="text-sm">The Regime Model provides the "weather report" for the whole market. It tells you if conditions are favorable (sunny), risky (cloudy), or dangerous (stormy).</p>
+                        <ul class="list-disc list-inside text-sm mt-2 space-y-1">
+                            <li><span class="font-semibold text-green-600">Low Risk (Bull Market):</span> Conditions are ideal. This is the best time to look for opportunities.</li>
+                            <li><span class="font-semibold text-yellow-600">Moderate Risk (Growth):</span> The market is generally positive but with some underlying risks. Proceed with caution.</li>
+                            <li><span class="font-semibold text-orange-600">High Risk (Caution):</span> Significant risks are present. It's wise to be defensive.</li>
+                            <li><span class="font-semibold text-red-600">Crisis:</span> Market conditions are dangerous. The priority should be capital preservation.</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 class="font-semibold text-md text-slate-800">2. The Scout: Breakout Signals</h4>
+                        <p class="text-sm">The Breakout Model looks for specific opportunities in individual stocks. A "Potential Breakout" signal means a stock is showing strong technical signs of an impending upward move.</p>
+                    </div>
+
+                    <div>
+                        <h4 class="font-semibold text-md text-slate-800">3. Combining the Signals: The Regime Filter</h4>
+                        <p class="text-sm">The most effective strategy is to listen to both the General and the Scout. The "Enable Regime Filter" checkbox does this for you.</p>
+                        <div class="bg-slate-100 p-3 rounded-md mt-2 text-sm">
+                            <p class="font-bold">A profitable strategy only takes breakout signals when the overall market regime is favorable.</p>
+                            <p class="mt-1"><strong class="text-green-700">High-Probability Trade:</strong> Regime is <span class="font-semibold">"Low Risk"</span> AND a stock shows a <span class="font-semibold">"Potential Breakout"</span> signal.</p>
+                            <p class="mt-1"><strong class="text-red-700">Low-Probability Trade:</strong> Regime is <span class="font-semibold">"Crisis"</span> but a stock shows a <span class="font-semibold">"Potential Breakout"</span>. The Regime Filter will correctly flag this as <span class="font-semibold text-yellow-600">"Hold (Regime Filter)"</span> because even a good stock can fail in a bad market.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="text-xs text-slate-500 pt-4 border-t border-gray-200"><strong>Disclaimer:</strong> This tool is for educational and informational purposes only. It is not financial advice. All trading involves risk, and you should conduct your own research before making any investment decisions.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // All existing JS variables
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const analyzeSpinner = document.getElementById('analyze-spinner');
+            const newsBtn = document.getElementById('news-btn');
+            const yahooBtn = document.getElementById('yahoo-btn');
+            const tickersInput = document.getElementById('tickers');
+            const resultsBody = document.getElementById('results-body');
+            const regimeText = document.getElementById('regime-text');
+            const regimeFilterCheckbox = document.getElementById('regime-filter');
+            const errorMessage = document.getElementById('error-message');
+            const regimeChartCanvas = document.getElementById('regimeChart');
+            
+            // New Modal elements
+            const tipsModal = document.getElementById('tips-modal');
+            const tipsOverlay = document.getElementById('tips-overlay');
+            const showTipsBtn = document.getElementById('show-tips-btn');
+            const closeTipsBtn = document.getElementById('close-tips-btn');
+            
+            let regimeChart = null;
+            let sortState = { column: 0, direction: 'asc' };
+
+            // --- Event Listeners ---
+            analyzeBtn.addEventListener('click', handleAnalysis);
+            clearBtn.addEventListener('click', () => { tickersInput.value = ''; });
+            newsBtn.addEventListener('click', fetchTickersFromFile);
+            yahooBtn.addEventListener('click', fetchMostActiveTickers);
+            regimeFilterCheckbox.addEventListener('change', toggleRegimeFilter);
+            
+            showTipsBtn.addEventListener('click', openTipsModal);
+            closeTipsBtn.addEventListener('click', closeTipsModal);
+            tipsOverlay.addEventListener('click', closeTipsModal);
+
+            document.querySelectorAll('th.sortable').forEach(header => {
+                header.addEventListener('click', () => {
+                    const column = parseInt(header.dataset.column);
+                    const sortType = header.dataset.sort;
+                    sortState.direction = (sortState.column === column && sortState.direction === 'asc') ? 'desc' : 'asc';
+                    sortState.column = column;
+                    sortTable(column, sortType, sortState.direction);
+                    updateSortHeaders();
+                });
+            });
+
+            // --- Modal Functions ---
+            function openTipsModal() {
+                tipsModal.classList.remove('hidden');
+                setTimeout(() => {
+                    tipsOverlay.classList.remove('opacity-0');
+                    tipsModal.querySelector('.modal-content').classList.remove('scale-95', 'opacity-0');
+                }, 10);
+            }
+            
+            function closeTipsModal() {
+                tipsOverlay.classList.add('opacity-0');
+                tipsModal.querySelector('.modal-content').classList.add('scale-95', 'opacity-0');
+                setTimeout(() => {
+                    tipsModal.classList.add('hidden');
+                }, 300);
+            }
+
+            // ... The rest of your existing JavaScript functions (handleAnalysis, populateTable, etc.) remain unchanged ...
+            async function handleAnalysis() {
+                const tickers = tickersInput.value.split(',').map(t => t.trim()).filter(Boolean);
+                if (tickers.length === 0) {
+                    showError("Please enter at least one ticker symbol.");
+                    return;
+                }
+                setLoadingState(true);
+                clearResults();
+
+                try {
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tickers: tickers })
+                    });
+                    
+                    if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error);
+                    
+                    updateRegimeStatus(data.regime);
+                    populateTable(data.results);
+                } catch (error) {
+                    console.error('Analysis failed:', error);
+                    showError('Analysis failed. Check server logs for details.');
+                    updateRegimeStatus({ error: "Unavailable" });
+                } finally {
+                    setLoadingState(false);
+                }
+            }
+
+            function populateTable(results) {
+                resultsBody.innerHTML = ''; // Clear initial message
+                if (results.length === 0) {
+                     resultsBody.innerHTML = '<tr><td colspan="6" class="text-center py-12 text-slate-500">No results found for the given tickers.</td></tr>';
+                     return;
+                }
+                results.forEach(result => {
+                    const row = document.createElement('tr');
+                    row.classList.add('result-row');
+
+                    const signalRaw = result.Signal_Raw || 'N/A';
+                    const signalFiltered = result.Signal_Filtered || 'N/A';
+                    const initialSignal = regimeFilterCheckbox.checked ? signalFiltered : signalRaw;
+                    const signalColorClass = getSignalColor(initialSignal);
+                    const tickerUrl = `https://finance.yahoo.com/quote/${result.Ticker}`;
+                    const predReturn = result.Pred_Return || 'N/A';
+
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                            <a href="${tickerUrl}" target="_blank" rel="noopener noreferrer">${result.Ticker}</a>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${result.Price}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${result.Confidence || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${predReturn}</td>
+                        <td class="signal-cell px-6 py-4 whitespace-nowrap text-sm font-semibold ${signalColorClass}" data-signal-raw="${signalRaw}" data-signal-filtered="${signalFiltered}">
+                            ${initialSignal}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">
+                           <div class="font-medium text-gray-700">${result.News_Confidence || 'N/A'}</div>
+                           <div class="text-xs">${result.News_Summary || 'N/A'}</div>
+                        </td>
+                    `;
+                    resultsBody.appendChild(row);
+                });
+                const initialHeader = document.querySelector(`th[data-column='${sortState.column}']`);
+                if(initialHeader) {
+                   sortTable(sortState.column, initialHeader.dataset.sort, sortState.direction);
+                   updateSortHeaders();
+                }
+            }
+            
+            function sortTable(column, type, direction) {
+                const rows = Array.from(resultsBody.querySelectorAll('tr'));
+                const multiplier = direction === 'asc' ? 1 : -1;
+
+                rows.sort((a, b) => {
+                    const aText = a.children[column].textContent.trim();
+                    const bText = b.children[column].textContent.trim();
+                    let aVal = aText, bVal = bText;
+
+                    if (type === 'price' || type === 'confidence' || type === 'pred_return') {
+                        aVal = parseFloat(aText.replace(/[^0-9.-]+/g,""));
+                        bVal = parseFloat(bText.replace(/[^0-9.-]+/g,""));
+                        if (isNaN(aVal)) aVal = -Infinity;
+                        if (isNaN(bVal)) bVal = -Infinity;
+                    }
+
+                    if (aVal < bVal) return -1 * multiplier;
+                    if (aVal > bVal) return 1 * multiplier;
+                    return 0;
+                });
+                resultsBody.innerHTML = '';
+                rows.forEach(row => resultsBody.appendChild(row));
+            }
+
+            // --- UI Update Functions ---
+            function updateRegimeStatus(regimeData) {
+                const regimeColors = { '0': '#16a34a', '1': '#ca8a04', '2': '#ea580c', '3': '#dc2626' }; // Green, Yellow, Orange, Red
+                const regimeLabels = ['Low Risk', 'Moderate Risk', 'High Risk', 'Crisis'];
+
+                if (regimeData && regimeData.probabilities) {
+                    regimeText.textContent = regimeData.regime_name;
+                    regimeText.className = 'font-bold text-lg block';
+                    regimeText.style.color = regimeColors[regimeData.regime_id] || '#475569';
+                    
+                    if (regimeChart) regimeChart.destroy();
+                    regimeChart = new Chart(regimeChartCanvas, {
+                        type: 'doughnut',
+                        data: {
+                            labels: regimeLabels,
+                            datasets: [{
+                                data: regimeData.probabilities,
+                                backgroundColor: Object.values(regimeColors),
+                                borderWidth: 0,
+                            }]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            cutout: '70%',
+                            plugins: { legend: { display: false }, tooltip: { enabled: true } }
+                        }
+                    });
+                } else {
+                    regimeText.textContent = 'Unavailable';
+                    regimeText.className = 'font-bold text-lg block text-red-600';
+                    if (regimeChart) regimeChart.destroy();
+                }
+            }
+
+            function toggleRegimeFilter() {
+                document.querySelectorAll('.result-row').forEach(row => {
+                    const signalCell = row.querySelector('.signal-cell');
+                    if (signalCell) {
+                        const newSignal = regimeFilterCheckbox.checked ? signalCell.dataset.signalFiltered : signalCell.dataset.signalRaw;
+                        signalCell.textContent = newSignal;
+                        signalCell.className = `signal-cell px-6 py-4 whitespace-nowrap text-sm font-semibold ${getSignalColor(newSignal)}`;
+                    }
+                });
+            }
+
+            function getSignalColor(signal) {
+                if (signal.includes('Breakout')) return 'text-green-600';
+                if (signal.includes('Filter')) return 'text-yellow-600';
+                if (signal.includes('Error') || signal.includes('Failed')) return 'text-red-600';
+                return 'text-slate-600';
+            }
+            
+            function updateSortHeaders() {
+                document.querySelectorAll('th.sortable').forEach(header => {
+                    header.classList.remove('sort-asc', 'sort-desc');
+                    const arrow = header.querySelector('.sort-arrow');
+                    arrow.innerHTML = '';
+                    if (parseInt(header.dataset.column) === sortState.column) {
+                        header.classList.add(sortState.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                        arrow.innerHTML = sortState.direction === 'asc' ? '&#9650;' : '&#9660;';
+                    }
+                });
+            }
+
+            async function fetchTickersFromFile() {
+                try {
+                    const response = await fetch('/get-tickers-from-file');
+                    const data = await response.json();
+                    if (data.tickers) { tickersInput.value = data.tickers.join(', '); } 
+                    else { showError(data.error || "Could not load tickers."); }
+                } catch (error) { showError("Failed to fetch tickers from file."); }
+            }
+
+            async function fetchMostActiveTickers() {
+                try {
+                    const response = await fetch('/get-yahoo-most-active');
+                    const data = await response.json();
+                    if (data.tickers) { tickersInput.value = data.tickers.join(', '); } 
+                    else { showError(data.error || "Could not load tickers."); }
+                } catch (error) { showError("Failed to fetch most active tickers."); }
+            }
+
+            function setLoadingState(isLoading) {
+                analyzeBtn.disabled = isLoading;
+                analyzeBtn.classList.toggle('opacity-50', isLoading);
+                analyzeBtn.classList.toggle('cursor-not-allowed', isLoading);
+                analyzeSpinner.classList.toggle('hidden', !isLoading);
+            }
+
+            function clearResults() {
+                resultsBody.innerHTML = '<tr><td colspan="6" class="text-center py-12 text-slate-500">Enter tickers and click "Analyze" to see results.</td></tr>';
+                errorMessage.classList.add('hidden');
+                errorMessage.textContent = '';
+            }
+            
+            function showError(message) {
+                 errorMessage.textContent = message;
+                 errorMessage.classList.remove('hidden');
+            }
+            
+            (async function() { // Initial regime check on page load
+                try {
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tickers: [] })
+                    });
+                     if (!response.ok) throw new Error('Server error');
+                    const data = await response.json();
+                    updateRegimeStatus(data.regime);
+                } catch (e) {
+                     updateRegimeStatus({ error: "Unavailable" });
+                }
+            })();
+        });
+    </script>
+</body>
+</html>
+
