@@ -42,15 +42,21 @@
                 <h1 class="text-3xl font-bold text-slate-800">Stock Breakout Predictor</h1>
                 <button id="show-tips-btn" class="text-sm text-blue-600 hover:underline mt-1">Trading Strategy Guide</button>
             </div>
-            <div id="regime-status" class="flex items-center gap-4 text-right">
-                 <div class="relative w-24 h-24">
-                    <canvas id="regimeChart"></canvas>
-                </div>
+            
+            <div id="regime-status" class="flex items-start gap-6 text-right">
                 <div>
                     <span class="font-medium text-slate-600">Current Market Regime:</span>
                     <span id="regime-text" class="font-bold text-slate-700 text-lg block">Loading...</span>
+                    
+                    <span class="font-medium text-slate-600 mt-2 block">News Sentiment (24h):</span>
+                    <span id="news-sentiment-text" class="font-bold text-slate-700 text-lg block">Loading...</span>
+                    <span id="news-sentiment-summary" class="text-xs text-slate-500 block max-w-xs">...</span>
+                </div>
+                <div class="relative w-24 h-24 flex-shrink-0">
+                    <canvas id="regimeChart"></canvas>
                 </div>
             </div>
+            
         </header>
 
         <div class="bg-white p-6 rounded-lg shadow-md mb-8">
@@ -68,12 +74,13 @@
                 <div class="flex-grow"></div>
                 <button id="news-btn" class="bg-white text-slate-800 font-semibold py-2 px-5 rounded-md hover:bg-slate-100 transition border border-slate-300">News Analysis</button>
                 <button id="yahoo-btn" class="bg-white text-slate-800 font-semibold py-2 px-5 rounded-md hover:bg-slate-100 transition border border-slate-300">Yahoo's Most Actives</button>
+                
                 <div class="flex items-center ml-4">
-                    <input type="checkbox" id="regime-filter" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
-                    <label for="regime-filter" class="ml-2 block text-sm font-medium text-gray-900">Enable Regime Filter</label>
+                    <input type="checkbox" id="news-filter" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="news-filter" class="ml-2 block text-sm font-medium text-gray-900">Show only with news</label>
                 </div>
             </div>
-        </div>
+            </div>
 
         <div id="results-container" class="bg-white rounded-lg shadow-md overflow-hidden">
             <div class="overflow-x-auto">
@@ -82,17 +89,18 @@
                         <tr>
                             <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="0" data-sort="string">Ticker <span class="sort-arrow"></span></th>
                             <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="1" data-sort="price">Price <span class="sort-arrow"></span></th>
-                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="2" data-sort="confidence">Confidence <span class="sort-arrow"></span></th>
-                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider tooltip" data-column="3" data-sort="string">
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="2" data-sort="price">Stop-Loss <span class="sort-arrow"></span></th>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="3" data-sort="confidence">Confidence <span class="sort-arrow"></span></th>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider tooltip" data-column="4" data-sort="string">
                                 Pred. Return (%) <span class="sort-arrow"></span>
                                 <span class="tooltiptext">Predicted return over the next breakout period, from the breakout model.</span>
                             </th>
-                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="4" data-sort="string">Signal <span class="sort-arrow"></span></th>
+                            <th scope="col" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-column="5" data-sort="string">Signal <span class="sort-arrow"></span></th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">News / Summary</th>
                         </tr>
                     </thead>
                     <tbody id="results-body" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="6" class="text-center py-12 text-slate-500">Enter tickers and click "Analyze" to see results.</td></tr>
+                        <tr><td colspan="7" class="text-center py-12 text-slate-500">Enter tickers and click "Analyze" to see results.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -100,7 +108,6 @@
         <p id="error-message" class="text-red-600 mt-4 font-medium hidden"></p>
     </div>
 
-    <!-- Tips Modal -->
     <div id="tips-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
         <div id="tips-overlay" class="absolute inset-0 bg-black bg-opacity-50 modal-overlay"></div>
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl transform modal-content scale-95 opacity-0">
@@ -131,12 +138,23 @@
 
                     <div>
                         <h4 class="font-semibold text-md text-slate-800">3. Combining the Signals: The Regime Filter</h4>
-                        <p class="text-sm">The most effective strategy is to listen to both the General and the Scout. The "Enable Regime Filter" checkbox does this for you.</p>
+                        <p class="text-sm">The Regime Filter is **always on** to provide the safest signals. It listens to both the General and the Scout.</p>
                         <div class="bg-slate-100 p-3 rounded-md mt-2 text-sm">
                             <p class="font-bold">A profitable strategy only takes breakout signals when the overall market regime is favorable.</p>
                             <p class="mt-1"><strong class="text-green-700">High-Probability Trade:</strong> Regime is <span class="font-semibold">"Low Risk"</span> AND a stock shows a <span class="font-semibold">"Potential Breakout"</span> signal.</p>
-                            <p class="mt-1"><strong class="text-red-700">Low-Probability Trade:</strong> Regime is <span class="font-semibold">"Crisis"</span> but a stock shows a <span class="font-semibold">"Potential Breakout"</span>. The Regime Filter will correctly flag this as <span class="font-semibold text-yellow-600">"Hold (Regime Filter)"</span> because even a good stock can fail in a bad market.</p>
+                            <p class="mt-1"><strong class="text-red-700">Low-Probability Trade:</strong> Regime is <span class="font-semibold">"Crisis"</span> but a stock shows a <span class="font-semibold">"Potential Breakout"</span>. The tool will correctly flag this as <span class="font-semibold text-yellow-600">"Hold (Regime Filter)"</span> because even a good stock can fail in a bad market.</p>
                         </div>
+                    </div>
+                    
+                    <div>
+                        <h4 class="font-semibold text-md text-slate-800">4. The Final Check: News Sentiment</h4>
+                        <p class="text-sm">The news icons give you a final sanity check. Always check the news before trading.</p>
+                        <ul class="list-disc list-inside text-sm mt-2 space-y-1">
+                            <li><span class="font-semibold">✅ (Positive):</span> The AI found a clear positive catalyst (e.g., strong earnings). This confirms a "Potential Breakout" signal.</li>
+                            <li><span class="font-semibold">❌ (Negative):</span> The AI found a clear negative catalyst (e.g., investigation, missed earnings). <strong class="text-red-600">You should be extremely cautious</strong>, even if the technical signal is positive.</li>
+                            <li><span class="font-semibold">⚠️ (Mixed):</span> The news contains both positive and negative elements. Requires more research.</li>
+                            <li><span class="font-semibold">⚪️ (Neutral):</span> No strong news catalyst was found.</li>
+                        </ul>
                     </div>
                 </div>
 
@@ -147,7 +165,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // All existing JS variables
+            // --- MODIFIED: Variables ---
             const analyzeBtn = document.getElementById('analyze-btn');
             const clearBtn = document.getElementById('clear-btn');
             const analyzeSpinner = document.getElementById('analyze-spinner');
@@ -156,11 +174,12 @@
             const tickersInput = document.getElementById('tickers');
             const resultsBody = document.getElementById('results-body');
             const regimeText = document.getElementById('regime-text');
-            const regimeFilterCheckbox = document.getElementById('regime-filter');
             const errorMessage = document.getElementById('error-message');
             const regimeChartCanvas = document.getElementById('regimeChart');
+            const newsSentimentText = document.getElementById('news-sentiment-text');
+            const newsSentimentSummary = document.getElementById('news-sentiment-summary');
+            const newsFilterCheckbox = document.getElementById('news-filter'); // New
             
-            // New Modal elements
             const tipsModal = document.getElementById('tips-modal');
             const tipsOverlay = document.getElementById('tips-overlay');
             const showTipsBtn = document.getElementById('show-tips-btn');
@@ -169,12 +188,12 @@
             let regimeChart = null;
             let sortState = { column: 0, direction: 'asc' };
 
-            // --- Event Listeners ---
+            // --- MODIFIED: Event Listeners ---
             analyzeBtn.addEventListener('click', handleAnalysis);
             clearBtn.addEventListener('click', () => { tickersInput.value = ''; });
             newsBtn.addEventListener('click', fetchTickersFromFile);
             yahooBtn.addEventListener('click', fetchMostActiveTickers);
-            regimeFilterCheckbox.addEventListener('change', toggleRegimeFilter);
+            newsFilterCheckbox.addEventListener('change', applyFilters); // New
             
             showTipsBtn.addEventListener('click', openTipsModal);
             closeTipsBtn.addEventListener('click', closeTipsModal);
@@ -208,13 +227,9 @@
                 }, 300);
             }
 
-            // ... The rest of your existing JavaScript functions (handleAnalysis, populateTable, etc.) remain unchanged ...
+            // --- Main Analysis Functions ---
             async function handleAnalysis() {
                 const tickers = tickersInput.value.split(',').map(t => t.trim()).filter(Boolean);
-                if (tickers.length === 0) {
-                    showError("Please enter at least one ticker symbol.");
-                    return;
-                }
                 setLoadingState(true);
                 clearResults();
 
@@ -230,7 +245,9 @@
                     if (data.error) throw new Error(data.error);
                     
                     updateRegimeStatus(data.regime);
-                    populateTable(data.results);
+                    if (tickers.length > 0) {
+                        populateTable(data.results);
+                    }
                 } catch (error) {
                     console.error('Analysis failed:', error);
                     showError('Analysis failed. Check server logs for details.');
@@ -240,45 +257,91 @@
                 }
             }
 
+            // --- NEW: Filter Function ---
+            function applyFilters() {
+                const showOnlyNews = newsFilterCheckbox.checked;
+                
+                document.querySelectorAll('.result-row').forEach(row => {
+                    // Check if the row has the 'no-news' class
+                    if (showOnlyNews && row.classList.contains('no-news')) {
+                        row.style.display = 'none';
+                    } else {
+                        row.style.display = ''; // Reverts to default (table-row)
+                    }
+                });
+            }
+
+            function getNewsSentimentIcon(isPositive, isNegative) {
+                if (isPositive === true && isNegative === false) {
+                    return '<span class="mr-1" title="Positive News">✅</span>';
+                }
+                if (isPositive === false && isNegative === true) {
+                    return '<span class="mr-1 font-bold text-red-600" title="Negative News">❌</span>';
+                }
+                if (isPositive === true && isNegative === true) {
+                    return '<span class="mr-1" title="Mixed News">⚠️</span>';
+                }
+                return '<span class="mr-1" title="Neutral News">⚪️</span>';
+            }
+
+            // --- MODIFIED: populateTable ---
             function populateTable(results) {
-                resultsBody.innerHTML = ''; // Clear initial message
+                resultsBody.innerHTML = '';
                 if (results.length === 0) {
-                     resultsBody.innerHTML = '<tr><td colspan="6" class="text-center py-12 text-slate-500">No results found for the given tickers.</td></tr>';
+                     resultsBody.innerHTML = '<tr><td colspan="7" class="text-center py-12 text-slate-500">No results found for the given tickers.</td></tr>';
                      return;
                 }
                 results.forEach(result => {
                     const row = document.createElement('tr');
                     row.classList.add('result-row');
 
-                    const signalRaw = result.Signal_Raw || 'N/A';
+                    // Add class for filtering
+                    const hasNews = result.News_Confidence !== 'N/A';
+                    if (hasNews) {
+                        row.classList.add('has-news');
+                    } else {
+                        row.classList.add('no-news');
+                    }
+                    
+                    // Always use filtered signal
                     const signalFiltered = result.Signal_Filtered || 'N/A';
-                    const initialSignal = regimeFilterCheckbox.checked ? signalFiltered : signalRaw;
-                    const signalColorClass = getSignalColor(initialSignal);
+                    const signalColorClass = getSignalColor(signalFiltered);
                     const tickerUrl = `https://finance.yahoo.com/quote/${result.Ticker}`;
                     const predReturn = result.Pred_Return || 'N/A';
 
+                    // 7-column layout
                     row.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                             <a href="${tickerUrl}" target="_blank" rel="noopener noreferrer">${result.Ticker}</a>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${result.Price}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600">${result.stop_loss || 'N/A'}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${result.Confidence || 'N/A'}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${predReturn}</td>
-                        <td class="signal-cell px-6 py-4 whitespace-nowrap text-sm font-semibold ${signalColorClass}" data-signal-raw="${signalRaw}" data-signal-filtered="${signalFiltered}">
-                            ${initialSignal}
+                        
+                        <td class="signal-cell px-6 py-4 whitespace-nowrap text-sm font-semibold ${signalColorClass}" data-signal-filtered="${signalFiltered}">
+                            ${signalFiltered}
                         </td>
+                        
                         <td class="px-6 py-4 text-sm text-gray-500">
-                           <div class="font-medium text-gray-700">${result.News_Confidence || 'N/A'}</div>
+                           ${getNewsSentimentIcon(result.News_Positive, result.News_Negative)}
+                           <span class="font-medium text-gray-700">${result.News_Confidence || 'N/A'}</span>
                            <div class="text-xs">${result.News_Summary || 'N/A'}</div>
                         </td>
                     `;
+                    
                     resultsBody.appendChild(row);
                 });
+                
+                // Re-sort
                 const initialHeader = document.querySelector(`th[data-column='${sortState.column}']`);
                 if(initialHeader) {
                    sortTable(sortState.column, initialHeader.dataset.sort, sortState.direction);
                    updateSortHeaders();
                 }
+                
+                // Apply filters after table is built
+                applyFilters();
             }
             
             function sortTable(column, type, direction) {
@@ -293,8 +356,8 @@
                     if (type === 'price' || type === 'confidence' || type === 'pred_return') {
                         aVal = parseFloat(aText.replace(/[^0-9.-]+/g,""));
                         bVal = parseFloat(bText.replace(/[^0-9.-]+/g,""));
-                        if (isNaN(aVal)) aVal = -Infinity;
-                        if (isNaN(bVal)) bVal = -Infinity;
+                        if (isNaN(aVal)) aVal = -Infinity * multiplier;
+                        if (isNaN(bVal)) bVal = -Infinity * multiplier;
                     }
 
                     if (aVal < bVal) return -1 * multiplier;
@@ -305,9 +368,9 @@
                 rows.forEach(row => resultsBody.appendChild(row));
             }
 
-            // --- UI Update Functions ---
+            // --- UI Update Functions (unchanged) ---
             function updateRegimeStatus(regimeData) {
-                const regimeColors = { '0': '#16a34a', '1': '#ca8a04', '2': '#ea580c', '3': '#dc2626' }; // Green, Yellow, Orange, Red
+                const regimeColors = { '0': '#16a34a', '1': '#ca8a04', '2': '#ea580c', '3': '#dc2626' };
                 const regimeLabels = ['Low Risk', 'Moderate Risk', 'High Risk', 'Crisis'];
 
                 if (regimeData && regimeData.probabilities) {
@@ -339,15 +402,34 @@
                 }
             }
 
-            function toggleRegimeFilter() {
-                document.querySelectorAll('.result-row').forEach(row => {
-                    const signalCell = row.querySelector('.signal-cell');
-                    if (signalCell) {
-                        const newSignal = regimeFilterCheckbox.checked ? signalCell.dataset.signalFiltered : signalCell.dataset.signalRaw;
-                        signalCell.textContent = newSignal;
-                        signalCell.className = `signal-cell px-6 py-4 whitespace-nowrap text-sm font-semibold ${getSignalColor(newSignal)}`;
-                    }
-                });
+            function updateNewsSentiment(data) {
+                const sentimentColors = {
+                    'Buy': 'text-green-600',
+                    'Hold': 'text-yellow-600',
+                    'Caution': 'text-red-600'
+                };
+
+                if (data && data.recommendation) {
+                    const colorClass = sentimentColors[data.recommendation] || 'text-slate-700';
+                    newsSentimentText.textContent = data.recommendation;
+                    newsSentimentText.className = `font-bold text-lg block ${colorClass}`;
+                    newsSentimentSummary.textContent = data.summary;
+                } else {
+                    newsSentimentText.textContent = 'Unavailable';
+                    newsSentimentText.className = 'font-bold text-lg block text-red-600';
+                    newsSentimentSummary.textContent = 'Could not load news sentiment.';
+                }
+            }
+
+            async function fetchMarketSentiment() {
+                try {
+                    const response = await fetch('/get-market-sentiment');
+                    if (!response.ok) throw new Error('Server error');
+                    const data = await response.json();
+                    updateNewsSentiment(data);
+                } catch (e) {
+                    updateNewsSentiment({ error: "Unavailable" });
+                }
             }
 
             function getSignalColor(signal) {
@@ -395,7 +477,7 @@
             }
 
             function clearResults() {
-                resultsBody.innerHTML = '<tr><td colspan="6" class="text-center py-12 text-slate-500">Enter tickers and click "Analyze" to see results.</td></tr>';
+                resultsBody.innerHTML = '<tr><td colspan="7" class="text-center py-12 text-slate-500">Enter tickers and click "Analyze" to see results.</td></tr>';
                 errorMessage.classList.add('hidden');
                 errorMessage.textContent = '';
             }
@@ -405,7 +487,10 @@
                  errorMessage.classList.remove('hidden');
             }
             
-            (async function() { // Initial regime check on page load
+            (async function() { // Initial page load
+                fetchMarketSentiment(); // Fetch news sentiment
+                
+                // Fetch initial regime
                 try {
                     const response = await fetch('/analyze', {
                         method: 'POST',
@@ -423,4 +508,3 @@
     </script>
 </body>
 </html>
-
